@@ -3,7 +3,7 @@
 const express = require('express');
 const morgan = require('morgan');
 const cors = require('cors');
-
+require('dotenv').config();
 const { PORT } = require('./config');
 
 const notesRouter = require('./routes/notes');
@@ -45,8 +45,10 @@ app.use((err, req, res, next) => {
 });
 
 // Listen for incoming connections
-app.listen(PORT, function () {
-  console.info(`Server listening on ${this.address().port}`);
-}).on('error', err => {
-  console.error(err);
-});
+app
+  .listen(PORT, function() {
+    console.info(`Server listening on ${this.address().port}`);
+  })
+  .on('error', err => {
+    console.error(err);
+  });
