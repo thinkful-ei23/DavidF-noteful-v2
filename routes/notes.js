@@ -37,11 +37,15 @@ router.get('/:id', (req, res, next) => {
   const id = req.params.id;
 
   knex
-    .select('notes.id', 'title', 'content')
+    .select('id', 'title', 'content')
     .from('notes')
     .where({ id: id })
     .then(results => {
-      res.sendStatus(200).json(results);
+      if (results.length > 0) {
+        res.json(results[0]);
+      } else {
+        next();
+      }
     })
     .catch(err => {
       next(err);
