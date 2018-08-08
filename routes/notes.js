@@ -7,20 +7,33 @@ const knex = require('../knex');
 const router = express.Router();
 
 // TEMP: Simple In-Memory Database
-const data = require('../db/notes');
-const simDB = require('../db/simDB');
-const notes = simDB.initialize(data);
+// const data = require('../db/notes');
+// const simDB = require('../db/simDB');
+// const notes = simDB.initialize(data);
 
 // Get All (and search by query)
 router.get('/', (req, res, next) => {
   const { searchTerm } = req.query;
+  const { folderId } = req.query;
 
   knex
-    .select('notes.id', 'title', 'content')
+    .select(
+      'notes.id',
+      'title',
+      'content',
+      'folders.id as folderId',
+      'folders.name as folderName'
+    )
     .from('notes')
+    .leftJoin('folders', 'notes.folder_id', 'folders.id')
     .modify(queryBuilder => {
       if (searchTerm) {
         queryBuilder.where('title', 'like', `%${searchTerm}%`);
+      }
+    })
+    .modify(queryBuilder => {
+      if (folderId) {
+        queryBuilder.where('folder_id', folderId);
       }
     })
     .orderBy('notes.id', 'asc')
@@ -37,19 +50,18 @@ router.get('/:id', (req, res, next) => {
   const id = req.params.id;
 
   knex
-    .select('id', 'title', 'content')
+    .first(
+      'notes.id',
+      'title',
+      'content',
+      'folders.id as folderId',
+      'folders.name as folderName'
+    )
     .from('notes')
-    .where({ id: id })
-    .then(results => {
-      if (results.length > 0) {
-        res.json(results[0]);
-      } else {
-        next();
-      }
-    })
-    .catch(err => {
-      next(err);
-    });
+    .leftJoin('folders', 'notes.folder_id', 'folders.id')
+    .where({ 'notes.id': id })
+    .then(results => res.json(results))
+    .catch(err => next(err));
 });
 
 // Put update an item
@@ -58,7 +70,7 @@ router.put('/:id', (req, res, next) => {
 
   /***** Never trust users - validate input *****/
   const updateObj = {};
-  const updateableFields = ['title', 'content'];
+  const updateableFields = ['title', 'content', 'folder_id'];
 
   updateableFields.forEach(field => {
     if (field in req.body) {
@@ -74,8 +86,8 @@ router.put('/:id', (req, res, next) => {
   }
   knex('notes')
     .where({ id: id })
+    .returning(['id', 'title', 'content', 'folder_id as folderId'])
     .update(updateObj)
-    .returning(['id', 'title', 'content'])
     .then(results => {
       res.json(results);
     })
@@ -86,9 +98,11 @@ router.put('/:id', (req, res, next) => {
 
 // Post (insert) an item
 router.post('/', (req, res, next) => {
-  const { title, content } = req.body;
+  const { title, content, folderId } = req.body;
 
-  const newItem = { title, content };
+  const newItem = { title, content, folder_id: folderId };
+
+  let noteId;
   /***** Never trust users - validate input *****/
   if (!newItem.title) {
     const err = new Error('Missing `title` in request body');
@@ -98,14 +112,30 @@ router.post('/', (req, res, next) => {
 
   knex('notes')
     .insert(newItem)
+    .returning('id')
+    .then(([id]) => {
+      noteId = id;
+      return knex
+        .select(
+          'notes.id',
+          'title',
+          'content',
+          'folder_id as folderId',
+          'folders.name as folderName'
+        )
+        .from('notes')
+        .leftJoin('folders', 'notes.folder_id', 'folders.id')
+        .where('notes.id', noteId);
+    })
     .then(item => {
       if (item) {
         res
-          .location(`http://${req.headers.host}/notes/${item.id}`)
+          .location(`${req.originalUrl}/${item.id}`)
           .status(201)
           .json(item);
       }
-    });
+    })
+    .catch(err => next(err));
 });
 
 // Delete an item
