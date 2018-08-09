@@ -78,9 +78,18 @@ router.get('/:id', (req, res, next) => {
     .leftJoin('folders', 'notes.folder_id', 'folders.id')
     .leftJoin('notes_tags', 'notes_tags.note_id', 'notes.id')
     .leftJoin('tags', 'notes_tags.tag_id', 'tags.id')
-    .where({ 'notes.id': id })
-    .then(results => res.json(results))
-    .catch(err => next(err));
+    .where('notes.id', id)
+    .then(result => {
+      if (result) {
+        const hydrated = hydrateNotes(result);
+        res.json(hydrated[0]);
+      } else {
+        next();
+      }
+    })
+    .catch(err => {
+      next(err);
+    });
 });
 
 // Put update an item
